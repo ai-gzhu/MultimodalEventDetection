@@ -1,10 +1,14 @@
 pip install opencv-python
+
 pip install opencv-contrib-python
 
 
 pip install gensim
+
 pip install --upgrade mmdnn
+
 pip install --upgrade torch torchvision
+
 pip install mxnet
 
 python download_models.py
