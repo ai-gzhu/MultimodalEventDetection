@@ -1,4 +1,13 @@
-node_modules
 GoogleNews-vectors-negative300.bin
-deepspeech
-inception5h
+kit_imagenet.py
+resnet152.json
+kit_pytorch.npy
+resnet152.npy
+__pycache__
+resnet152.pb
+resnet-152-symbol.json
+synset.txt
+imagenet11k-resnet-152-0000.params
+resnet-152-0000.params
+imagenet11k-resnet-152-symbol.json
+resnet152Full.pth
