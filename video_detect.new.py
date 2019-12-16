@@ -3,11 +3,10 @@
 
 # import the necessary packages
 from keras.preprocessing import image as image_utils
-
+from gensim.models import KeyedVectors
 import torch
 import io
 import imp
-
 import numpy as np
 import argparse
 import cv2
@@ -16,6 +15,8 @@ import math
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", required=True,
 	help="path to the input video")
+ap.add_argument("-q", "--query", required=True,
+	help="the event to detect")
 args = vars(ap.parse_args())
 
 
@@ -52,6 +53,10 @@ cap = cv2.VideoCapture(args["video"])
 if (cap.isOpened()== False): 
 		print("Error opening video stream or file")
 
+
+print("Loading word2vec vectors")
+w2v_model = KeyedVectors.load_word2vec_format("./GoogleNews-vectors-negative300.bin", binary=True)
+
 # Read until video is completed
 while(cap.isOpened()):
 		# Capture frame-by-frame
@@ -83,11 +88,46 @@ while(cap.isOpened()):
 				# Print the top-5 Results:
 				h_x = output.data.squeeze()
 				probs, idx = h_x.sort(0, True)
-				print('Top-5 Results: ')
+				
+				
+				similarity = 0.
+				total = 0.01
+				
 				for i in range(0, num_predictions):
-					print('{:.2f}% -> {}'.format(probs[i] * 100.0, labels[idx[i]]))
-				str_final_label = 'The Image is a ' + class_name + '.'
-				print(str_final_label)
+					tokens1 = labels[idx[i]].split(", ")
+					for s1 in range(1, len(tokens1)):
+						tokens2 = tokens1[s1].split(" ")
+						for s2 in range(0, len(tokens2)):
+							try:
+								s = w2v_model.similarity(args["query"], tokens2[s2])
+								p = probs[i]
+								
+								
+								
+								similarity += s*p
+								total += p
+							except:
+								pass
+								#do nothing
+							
+				
+				#print(similarity / total)
+				
+				barGraph = ""
+				numBars = 100
+				
+				for i in range(0, math.floor(numBars*(similarity/total))):
+					barGraph += "|"
+				for i in range(math.floor(numBars*(similarity/total)), numBars):
+					barGraph += "-"
+				
+				print(barGraph);
+				
+				#print('Top-5 Results: ')
+				#for i in range(0, num_predictions):
+				#	print('{:.2f}% -> {}'.format(probs[i] * 100.0, labels[idx[i]]))
+				#str_final_label = 'The Image is a ' + class_name + '.'
+				#print(str_final_label)
 				
 				
 				
