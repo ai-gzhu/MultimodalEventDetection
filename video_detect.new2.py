@@ -12,10 +12,9 @@ import argparse
 import math
 import time
 
-import torchvision.models as models
-
 import torch.nn.functional as F
 import cv2
+from keras.preprocessing import image as image_utils
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", required=True,
@@ -28,11 +27,14 @@ args = vars(ap.parse_args())
 # Load Converted Model:
 num_predictions = 10
 model_address = './resnet152Full.pth'
-lexicon_address = './synset.new.txt'
+lexicon_address = './synset.txt'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-print("Loading inception_v3 model")
-model = models.inception_v3(pretrained=True).to(device)
+MainModel = imp.load_source('MainModel', "kit_imagenet.py")
+with open('./resnet152Full.pth', 'rb') as f:
+	buffer = io.BytesIO(f.read())
+torch.load(buffer)
+model = torch.load(model_address).to(device)
 model.eval()
 
 
@@ -58,6 +60,7 @@ vframes = vframes.to(device)
 for vframe in vframes:
 
     start = time.time()
+    
     orig = vframe
     vframe = vframe.float()
     vframe = torch.transpose(vframe, 1, 2)
@@ -158,11 +161,11 @@ for vframe in vframes:
     for i in range(math.floor(numBars*barRatio), numBars):
         barGraph += "-"
    
-    print(barGraph);
-    
     end = time.time()
     print(end - start)
-        
+    
+    print(barGraph);
+    
     #print('Top Recognition was {:.2f}% for {}'.format(top_probability_value* 100.0, top_probability_string))
     #print('Top Similarity was {:.2f}% for {}'.format(top_similarity_value * 100.0, top_similarity_string))
     #print('Top Combination was {:.2f}% for {}'.format(math.sqrt(top_combination_value) * 100.0, top_combination_string))
@@ -178,7 +181,7 @@ for vframe in vframes:
         break
         
 # Closes all the frames
-cv2.destroyAllWindows()
+#cv2.destroyAllWindows()
 				
  
 

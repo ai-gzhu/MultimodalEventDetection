@@ -21,7 +21,7 @@ args = vars(ap.parse_args())
 
 
 # Load Converted Model:
-num_predictions = 5 
+num_predictions = 50
 model_address = './resnet152Full.pth'
 lexicon_address = './synset.txt'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -80,9 +80,6 @@ while(cap.isOpened()):
 				# Make prediction (forward pass):
 				with torch.no_grad():
 					output = model(x)
-				max, argmax = output.data.squeeze().max(0)
-				class_id = argmax.item()
-				class_name = labels[class_id]
 				
 				
 				# Print the top-5 Results:
