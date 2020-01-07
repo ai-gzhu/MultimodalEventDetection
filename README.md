@@ -2,12 +2,16 @@ pip install opencv-python
 
 pip install opencv-contrib-python
 
-
 pip install gensim
 
 pip install --upgrade mmdnn
 
+
+### for linux
 pip install --upgrade torch torchvision
+### or for windows in Anaconda3 command console
+conda install pytorch torchvision cudatoolkit=10.1 -c pytorch
+
 
 pip install mxnet
 
@@ -19,4 +23,12 @@ pip install numpy==1.16.1
 
 python -m mmdnn.conversion._script.IRToCode -f pytorch --IRModelPath resnet152.pb --dstModelPath kit_imagenet.py --IRWeightPath resnet152.npy -dw kit_pytorch.npy  
 
-python -m mmdnn.conversion.examples.pytorch.imagenet_test --dump resnet152Full.pth -n kit_imagenet.py -w kit_pytorch.npy 
+python -m mmdnn.conversion.examples.pytorch.imagenet_test --dump resnet152Full.pth -n kit_imagenet.py -w kit_pytorch.npy  
+
+conda install av -c conda-forge
+
+conda install swig
+
+pip install SpeechRecognition
+
+pip install PocketSphinx

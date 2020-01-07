@@ -1,0 +1,3 @@
+Create two modes: ASR / Keyword detection.
+Choose a paper for 6th of december report.
+Output statistics showing the prevalence of query-related hits.

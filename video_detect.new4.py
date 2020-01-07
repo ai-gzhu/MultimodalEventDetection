@@ -11,10 +11,9 @@ import numpy as np
 import argparse
 import math
 import time
-
 import torch.nn.functional as F
 import cv2
-from keras.preprocessing import image as image_utils
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", required=True,
@@ -29,7 +28,7 @@ num_predictions = 50
 model_address = './resnet152Full.pth'
 lexicon_address = './synset.txt'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+ 
 MainModel = imp.load_source('MainModel', "kit_imagenet.py")
 with open('./resnet152Full.pth', 'rb') as f:
 	buffer = io.BytesIO(f.read())
@@ -58,9 +57,11 @@ vframes = vframes.to(device)
     
 last_frame = None
 
-for vframe in vframes:
 
-    
+for i in range(0, len(vframes)):
+
+
+    vframe = vframes[i]
     orig = vframe
     vframe = vframe.float()
     vframe = torch.transpose(vframe, 1, 2)
@@ -168,9 +169,9 @@ for vframe in vframes:
        
         print(barGraph)
         
-        print('Top Recognition was {:.2f}% for {}'.format(top_probability_value* 100.0, top_probability_string))
-        print('Top Similarity was {:.2f}% for {}'.format(top_similarity_value * 100.0, top_similarity_string))
-        print('Top Combination was {:.2f}% for {}'.format(math.sqrt(top_combination_value) * 100.0, top_combination_string))
+        #print('Top Recognition was {:.2f}% for {}'.format(top_probability_value* 100.0, top_probability_string))
+        #print('Top Similarity was {:.2f}% for {}'.format(top_similarity_value * 100.0, top_similarity_string))
+        #print('Top Combination was {:.2f}% for {}'.format(math.sqrt(top_combination_value) * 100.0, top_combination_string))
         
         #print('Top-N Results: ')
         #for i in range(0, num_predictions):

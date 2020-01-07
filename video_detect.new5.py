@@ -11,10 +11,14 @@ import numpy as np
 import argparse
 import math
 import time
-
+import os
+from pocketsphinx import AudioFile
 import torch.nn.functional as F
 import cv2
-from keras.preprocessing import image as image_utils
+import wave
+
+AUDIO_FILE = "./video-audio.wav"
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", required=True,
@@ -29,7 +33,7 @@ num_predictions = 50
 model_address = './resnet152Full.pth'
 lexicon_address = './synset.txt'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+ 
 MainModel = imp.load_source('MainModel', "kit_imagenet.py")
 with open('./resnet152Full.pth', 'rb') as f:
 	buffer = io.BytesIO(f.read())
@@ -44,7 +48,7 @@ with open(lexicon_address, 'r') as f:
 	labels = [l.rstrip() for l in f]
 
 print("Loading word2vec vectors")
-w2v_model = KeyedVectors.load_word2vec_format("./GoogleNews-vectors-negative300.bin", binary=True)
+#w2v_model = KeyedVectors.load_word2vec_format("./GoogleNews-vectors-negative300.bin", binary=True)
 
 print("Loading video file")
 vframes, aframes, info = torchvision.io.read_video(args["video"], pts_unit='sec')
@@ -58,9 +62,57 @@ vframes = vframes.to(device)
     
 last_frame = None
 
-for vframe in vframes:
 
+
+
+
+
+
+
+
+#aframes = torch.div(torch.sum(aframes, dim=0), len(aframes))
+print(aframes)
+aframes = torch.add(torch.mul(aframes, .5), .5)
+aframes = torch.mul(aframes, 255)
+aframes = aframes.char()
+
+audio_process_interval = 60 #frames
+audio_process_count = 0
+
+
+fps = info["audio_fps"]
+bufsize = fps*5
+# Decode streaming data
+buf = bytearray(bufsize)
     
+    
+#print(aframes_per_vframe)
+for j in range(0, len(aframes)):
+    for i in range(0, math.floor(len(aframes[j])/bufsize)):
+            
+        wave_writer = wave.open(AUDIO_FILE, 'w')
+
+        wave_writer.setnchannels(1) # mono
+        wave_writer.setsampwidth(1)
+        wave_writer.setframerate(fps)
+        
+        wave_writer.writeframesraw(bytes(aframes[i*bufsize:(i+1)*bufsize].numpy()))
+            
+        wave_writer.close()
+
+        for phrase in AudioFile(frate=fps, audio_file=AUDIO_FILE):  # frate (default=100)
+            print('-' * 28)
+            print('| %5s |  %3s  |   %4s   |' % ('start', 'end', 'word'))
+            print('-' * 28)
+            for s in phrase.seg():
+                print('| %4ss | %4ss | %8s |' % (s.start_frame / fps, s.end_frame / fps, s.word))
+            print('-' * 28)
+
+
+for i in range(0, len(vframes)):
+
+
+    vframe = vframes[i]
     orig = vframe
     vframe = vframe.float()
     vframe = torch.transpose(vframe, 1, 2)
@@ -168,9 +220,9 @@ for vframe in vframes:
        
         print(barGraph)
         
-        print('Top Recognition was {:.2f}% for {}'.format(top_probability_value* 100.0, top_probability_string))
-        print('Top Similarity was {:.2f}% for {}'.format(top_similarity_value * 100.0, top_similarity_string))
-        print('Top Combination was {:.2f}% for {}'.format(math.sqrt(top_combination_value) * 100.0, top_combination_string))
+        #print('Top Recognition was {:.2f}% for {}'.format(top_probability_value* 100.0, top_probability_string))
+        #print('Top Similarity was {:.2f}% for {}'.format(top_similarity_value * 100.0, top_similarity_string))
+        #print('Top Combination was {:.2f}% for {}'.format(math.sqrt(top_combination_value) * 100.0, top_combination_string))
         
         #print('Top-N Results: ')
         #for i in range(0, num_predictions):

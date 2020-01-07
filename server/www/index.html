@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WebSocket demo</title>
+    <meta charset="utf-8" name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/bootstrap.min.css" />
+    <script src="js/jquery.min.js"></script>
+    <script src="js/bootstrap.bundle.min.js"></script>
+</head>
+
+<body>
+
+    <br>
+
+    <div class="row fixed">
+        <div class="col-xs-0 col-sm-2 col-md-2 col-lg-3">
+        </div>
+        <div class="col-xs-12 col-sm-8 col-md-8 col-lg-6" id="main_div" style="padding: 0px;">
+            <div class="modal-body">
+                <br>
+                <label>Event Key Words</label>
+                <information data-toggle="tooltip"
+                    title="This feature allows you to control the type of event you want to query for.">&nbsp;?&nbsp;
+                </information>
+                <table class="table table-dark">
+                    <thead>
+                        <tr>
+                            <th>Event Key Words</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="key_words_table">
+                    </tbody>
+                </table>
+                <br>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" checked id="use_images">
+                    <label class="form-check-label" for="use_images">
+                        Use Visual Event Detection
+                    </label>
+                    <information data-toggle="tooltip"
+                        title="This option allows you to enable/disable image classification in the event detection algorithm.">
+                        &nbsp;?&nbsp;</information>
+                </div>
+                <br>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="use_sounds">
+                    <label class="form-check-label" for="use_sounds">
+                        Use Audio Event Detection
+                    </label>
+                    <information data-toggle="tooltip"
+                        title="This option allows you to enable/disable automatic speech recognition in the event detection algorithm.">
+                        &nbsp;?&nbsp;</information>
+                </div>
+                <br>
+                <div class="form-group">
+                    <label for="image_change_threshold">Image Change Threshold (%)</label>
+                    <information data-toggle="tooltip"
+                        title="The percent (%) change in the video frames required to trigger the visual detector. Higher values result in increased performance, but less accuracy.">
+                        &nbsp;?&nbsp;</information>
+                    <input type="number" class="form-control" id="image_change_threshold" min="1" max="100" step="0.1"
+                        value=20>
+                </div>
+                <div class="form-group">
+                    <label for="query_window_duration">Query Window Duration (seconds)</label>
+                    <information data-toggle="tooltip"
+                        title="The minimum length of a segment of the video that is remixed for containing the target event(s).">
+                        &nbsp;?&nbsp;</information>
+                    <input type="number" class="form-control" id="query_window_duration" min="0.01" max="10" step="0.01"
+                        value=2>
+                </div>
+                <br>
+
+                <div style="text-align: center;">
+                    <button type="button" class="btn btn-outline-warning mx-auto"
+                        onclick="$('#load_video').click()">Choose
+                        Video</button>
+                    <input type="file" accept="video/*" style="color:#fff; display: none;" id="load_video"
+                        onchange="state.video_chosen(event)">
+                    <button type="button" id="upload_video" class="btn btn-outline-success mx-auto"
+                        onclick="state.upload_video()">Upload Video</button>
+                </div>
+                <div style="text-align: center;" id="video_preview">
+                    <br>
+                    <label for="video">Video Preview:</label>
+                    <br>
+                    <video id="video" height="224" controls>
+                    </video>
+                </div>
+                `<div style="text-align: center;" id="video_warning">
+                    <label class="blink">Please choose a video to process!</label>
+                </div>`
+
+            </div>
+        </div>
+        <div class="col-xs-0 col-sm-2 col-md-2 col-lg-3">
+        </div>
+    </div>
+    <br>
+    <script>
+
+        function GlobalState() {
+            this.key_words = [];
+            this.use_images = true;
+            this.use_sounds = false;
+            this.image_change_threshold = 20.0;
+            this.query_window_duration = 2.0;
+            this.video = null;
+        }
+
+        GlobalState.prototype.display = function () {
+
+            var key_words_table = "";
+
+            if (this.key_words.length == 0)
+                key_words_table +=
+                    `<tr id="no_words_indicator">
+                    <th colspan="2">
+                        <label class="blink">Enter at least one key word!</label>
+                    </th>
+                </tr>`
+
+            for (var i = 0; i < this.key_words.length; i++)
+                key_words_table +=
+                    `<tr>
+                    <th style="vertical-align: middle;">`
+                    + this.key_words[i] +
+                    `   </th>
+                    <th>
+                        <button type="button" class="btn btn-outline-danger"
+                            onclick="state.remove_key_word(`+ i + `)">Delete</button>
+                    </th>
+                </tr>`
+            key_words_table +=
+                `<tr class="form-group">
+                <th>
+                    <input type="text" class="form-control" id="new_key_word" placeholder="New Key Word">
+                </th>
+                <th>
+                    <button type="button" class="btn btn-outline-success mx-auto"
+                        onclick="state.add_key_word()">Add</button>
+                </th>
+            </tr>`;
+
+            $("#key_words_table").html(key_words_table);
+
+
+            $("#use_images").prop("checked", this.use_images);
+            $("#use_sounds").prop("checked", this.use_sounds);
+            $("#image_change_threshold").val(this.image_change_threshold);
+            $("#query_window_duration").val(this.query_window_duration);
+
+            if (!state.video) {
+                $("#video_preview").hide();
+                $("#video_warning").show();
+                $("#upload_video").hide();
+            }
+            else {
+                $("#video_preview").show();
+                $("#video_warning").hide();
+                $("#upload_video").show();
+            }
+        }
+        GlobalState.prototype.add_key_word = function () {
+            this.key_words.push($("#new_key_word").val());
+            $("#new_key_word").val("");
+            this.display();
+        }
+        GlobalState.prototype.remove_key_word = function (index) {
+            this.key_words.splice(index, 1);
+            this.display();
+        }
+        GlobalState.prototype.video_chosen = function (event) {
+            var reader = new FileReader();
+            reader.onload = function (state) {
+                var array_buffer = this.result,
+                    array = new Uint8Array(array_buffer);
+                state.video = array;
+                var file_url = URL.createObjectURL(event.target.files[0])
+                state.display();
+                $("#video").attr("src", file_url);
+            }.bind(reader, this)
+            reader.readAsArrayBuffer(event.target.files[0]);
+        }
+        GlobalState.prototype.upload_video = function () {
+        }
+
+        var state = new GlobalState();
+        state.display();
+
+        $(document).ready(function () {
+            $('[data-toggle="tooltip"]').tooltip();
+        });
+
+        var ws = new WebSocket("ws://127.0.0.1/");
+
+        ws.binaryType = "arraybuffer";
+        ws.onmessage = function (event) {
+            console.log(event.data)
+            ws.send(btoa(event.data), { binary: true, mask: true });
+        };
+    </script>
+</body>
+
+</html>

@@ -11,3 +11,4 @@ imagenet11k-resnet-152-0000.params
 resnet-152-0000.params
 imagenet11k-resnet-152-symbol.json
 resnet152Full.pth
+protobuf-3.11.2
