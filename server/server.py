@@ -13,13 +13,20 @@ import posixpath
 import mimetypes
 import base64
 from http import HTTPStatus
+from messages_pb2 import Message
 
+message = Message()
 
 class WebSocketServerProtocolWithHTTP(websockets.WebSocketServerProtocol):
     """Implements a simple static file server for WebSocketServer"""
 
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     async def process_request(self, path, request_headers):
         """Serves a file when doing a GET request with a valid path"""
+        self.max_size = 2**20
 
         if "Upgrade" in request_headers:
             return  # Probably a WebSocket connection
@@ -85,11 +92,15 @@ class WebSocketServerProtocolWithHTTP(websockets.WebSocketServerProtocol):
 
 async def on_connection(websocket, path):
     while True:
-        now = datetime.datetime.utcnow().isoformat() + 'Z'
-        await websocket.send(now)
-        data = await websocket.recv()
-        print("Received: {}".format(base64.b64decode(data)))
-        await asyncio.sleep(random.random() * 2)
+        #now = datetime.datetime.utcnow().isoformat() + 'Z'
+        #await websocket.send(now)
+        length = int(await websocket.recv())
+        array = b''
+        while len(array) != length:
+            array += await websocket.recv()
+        #print("Received: {}".format(array))
+        print(message.FromString(array))
+        #await asyncio.sleep(random.random() * 2)
 
 
 if __name__ == "__main__":

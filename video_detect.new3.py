@@ -168,9 +168,9 @@ for vframe in vframes:
        
         print(barGraph)
         
-        print('Top Recognition was {:.2f}% for {}'.format(top_probability_value* 100.0, top_probability_string))
-        print('Top Similarity was {:.2f}% for {}'.format(top_similarity_value * 100.0, top_similarity_string))
-        print('Top Combination was {:.2f}% for {}'.format(math.sqrt(top_combination_value) * 100.0, top_combination_string))
+        #print('Top Recognition was {:.2f}% for {}'.format(top_probability_value* 100.0, top_probability_string))
+        #print('Top Similarity was {:.2f}% for {}'.format(top_similarity_value * 100.0, top_similarity_string))
+        #print('Top Combination was {:.2f}% for {}'.format(math.sqrt(top_combination_value) * 100.0, top_combination_string))
         
         #print('Top-N Results: ')
         #for i in range(0, num_predictions):

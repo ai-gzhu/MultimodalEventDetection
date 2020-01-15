@@ -8,16 +8,28 @@
     <link rel="stylesheet" href="css/bootstrap.min.css" />
     <script src="js/jquery.min.js"></script>
     <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/protobuf.js"></script>
 </head>
 
 <body>
 
+    <div style="z-index: 10; position:absolute; text-align:center; border:none !important; height:100%; width:100%;  overflow-y: auto; background-color: black; display: none;"
+        id="processing_div">
+        <div style="height: 30%;"></div>
+        <h1 id="processing_header" style="text-align:center; color:#0f0; font-size: 24px !important;"
+            class="blink-white">
+            Processing
+        </h1>
+        <!-- >div class="loader"></div-->
+
+        <label id="processing_message" style="color: #fff;"></label>
+    </div>
     <br>
 
-    <div class="row fixed">
+    <div class="row fixed" style="z-index: 0;" id="main_div">
         <div class="col-xs-0 col-sm-2 col-md-2 col-lg-3">
         </div>
-        <div class="col-xs-12 col-sm-8 col-md-8 col-lg-6" id="main_div" style="padding: 0px;">
+        <div class="col-xs-12 col-sm-8 col-md-8 col-lg-6" style="padding: 0px;">
             <div class="modal-body">
                 <br>
                 <label>Event Key Words</label>
@@ -185,22 +197,101 @@
             reader.readAsArrayBuffer(event.target.files[0]);
         }
         GlobalState.prototype.upload_video = function () {
+            this.show_processing();
+            protobuf.load("proto/messages.proto", function(err, root) {
+                if (err)
+                    throw err;
+                console.log(root)
+
+                // Obtain a message type
+                var Message = root.lookupType("messages.Message");
+                console.log(Message)
+
+                var json = {
+                    type: Message.Type.VIDEO,
+                    video: this.video
+                }
+
+                var encoded = Message.encode(json).finish();
+
+                console.log(encoded)
+                
+                var ws = new WebSocket("ws://127.0.0.1/");
+
+                ws.binaryType = "arraybuffer";
+                ws.onmessage = function (event) {
+                    console.log(event.data)
+                };
+                ws.onopen = function (){
+                    ws.send(encoded.length);
+                    var fragment_size = 1024*512;
+                    for(var i = 0; i < encoded.length; i+=fragment_size)
+                    {
+                        var start = i;
+                        var end = i+fragment_size;
+                            
+                        ws.send(encoded.subarray(start, end));
+                    }
+                }
+                /*
+
+                // Exemplary payload
+                var payload = { Field: "String" };
+
+                // Verify the payload if necessary (i.e. when possibly incomplete or invalid)
+                var errMsg = Message.verify(payload);
+                if (errMsg)
+                    throw Error(errMsg);
+
+                // Create a new message
+                var message = Message.create(payload); // or use .fromObject if conversion is necessary
+
+                // Encode a message to an Uint8Array (browser) or Buffer (node)
+                var buffer = Message.encode(message).finish();
+                // ... do something with buffer
+
+                // Decode an Uint8Array (browser) or Buffer (node) to a message
+                var message = Message.decode(buffer);
+                // ... do something with message
+
+                // If the application uses length-delimited buffers, there is also encodeDelimited and decodeDelimited.
+
+                // Maybe convert the message back to a plain object
+                var object = Message.toObject(message, {
+                    longs: String,
+                    enums: String,
+                    bytes: String,
+                    // see ConversionOptions
+                });
+                */
+            }.bind(this));
         }
 
+        GlobalState.prototype.show_processing = function (message = "Processing") {
+            $("#processing_div").show()
+            $("#main_div").hide();
+            $("#processing_header").html(message);
+            this.show_processing_percent(0);
+        }
+
+        GlobalState.prototype.hide_processing = function () {
+            $("#processing_div").hide();
+            $("#main_div").show();
+        }
+        GlobalState.prototype.show_processing_percent = function (percent) {
+            this.show_processing_message(Math.floor(percent) + "%");
+        }
+        GlobalState.prototype.show_processing_message = function (message) {
+            $("#processing_message").html(message);
+        }
         var state = new GlobalState();
         state.display();
 
         $(document).ready(function () {
             $('[data-toggle="tooltip"]').tooltip();
         });
-
-        var ws = new WebSocket("ws://127.0.0.1/");
-
-        ws.binaryType = "arraybuffer";
-        ws.onmessage = function (event) {
-            console.log(event.data)
-            ws.send(btoa(event.data), { binary: true, mask: true });
-        };
+        /*
+        */
     </script>
 </body>
 

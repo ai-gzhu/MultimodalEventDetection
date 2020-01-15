@@ -7,16 +7,16 @@
 
 
 information {
-    color: #fff !important;
+    color: #ff7 !important;
     border-radius: 50%;
-    border: 1px solid #fff !important;
+    border: 1px solid #ff0 !important;
 }
 .tooltip-inner {
-    border: 3px solid #0f0 !important;
+    border: 3px solid #ff0 !important;
 }
 html,
 body{
-    background-color: #456 !important;
+    background-color: #000 !important;
     overflow-x: hidden;
 }
 
@@ -87,6 +87,17 @@ table {
 	50%{		color: #fff;	}
 	100%{	color: #f70;	}
 }
+
+.blink-white {
+	animation: white-blinker 1s linear infinite;
+}
+
+@keyframes white-blinker {
+	50% {
+		color: #fff;
+	}
+}
+
 .modal-dialog {
     max-width: 100% !important;
 }
