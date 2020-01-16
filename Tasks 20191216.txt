@@ -1,7 +1,0 @@
-Change ouptut to be probabilities instead of bar graph
-Detect audio
-
-OCR!!
-
-Online interface for uploading a video / downloading segments of high likelyhood of the event
-For a large number of input videos, find the video is most likely related to the query event

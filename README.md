@@ -32,3 +32,5 @@ conda install swig
 pip install SpeechRecognition
 
 pip install PocketSphinx
+
+pip install protobuf

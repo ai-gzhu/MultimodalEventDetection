@@ -1,252 +1,97 @@
-"""Simple HTTP Server With Upload.
-
-This module builds on BaseHTTPServer by implementing the standard GET
-and HEAD requests in a fairly straightforward manner.
-
-see: https://gist.github.com/UniIsland/3346170
 """
- 
- 
-__version__ = "0.1"
-__all__ = ["SimpleHTTPRequestHandler"]
-__author__ = "bones7456"
-__home_page__ = "http://li2z.cn/"
- 
+"""
+
+#ResNet152 Image Classification and Manipulation
+import torch
+import torch.nn.functional as F
+import torchvision
+import imp
+import io
+
+#Word2Vec
+from gensim.models import KeyedVectors
+from gensim import matutils
+from numpy import dot
+
+#WebSocket Server
 import os
+import asyncio
+import time
+import random
+import websockets
 import posixpath
-import http.server
-import urllib.request, urllib.parse, urllib.error
-import cgi
-import shutil
 import mimetypes
-import re
-from io import BytesIO
- 
- 
-class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
- 
-    """Simple HTTP request handler with GET/HEAD/POST commands.
+import base64
+from http import HTTPStatus
+from messages_pb2 import Message
+import threading
 
-    This serves files from the current directory and any of its
-    subdirectories.  The MIME type for files is determined by
-    calling the .guess_type() method. And can reveive file uploaded
-    by client.
+#Debugging
+import cv2
+import numpy as np
+import math
 
-    The GET/HEAD/POST requests are identical except that the HEAD
-    request omits the actual contents of the file.
+# Load Converted Model:
+num_predictions = 50
+model_address = './resnet152Full.pth'
+lexicon_address = './synset.txt'
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+MainModel = imp.load_source('MainModel', "kit_imagenet.py")
+with open('./resnet152Full.pth', 'rb') as f:
+	buffer = io.BytesIO(f.read())
+torch.load(buffer)
+model = torch.load(model_address).to(device)
+model.eval()
 
-    """
- 
-    server_version = "SimpleHTTPWithUpload/" + __version__
- 
-    def do_GET(self):
-        """Serve a GET request."""
-        f = self.send_head()
-        if f:
-            self.copyfile(f, self.wfile)
-            f.close()
- 
-    def do_HEAD(self):
-        """Serve a HEAD request."""
-        f = self.send_head()
-        if f:
-            f.close()
- 
-    def do_POST(self):
-        """Serve a POST request."""
-        r, info = self.deal_post_data()
-        print((r, info, "by: ", self.client_address))
-        f = BytesIO()
-        f.write(b'<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">')
-        f.write(b"<html>\n<title>Upload Result Page</title>\n")
-        f.write(b"<body>\n<h2>Upload Result Page</h2>\n")
-        f.write(b"<hr>\n")
-        if r:
-            f.write(b"<strong>Success:</strong>")
-        else:
-            f.write(b"<strong>Failed:</strong>")
-        f.write(info.encode())
-        f.write(("<br><a href=\"%s\">back</a>" % self.headers['referer']).encode())
-        length = f.tell()
-        f.seek(0)
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.send_header("Content-Length", str(length))
-        self.end_headers()
-        if f:
-            self.copyfile(f, self.wfile)
-            f.close()
-        
-    def deal_post_data(self):
-        content_type = self.headers['content-type']
-        if not content_type:
-            return (False, "Content-Type header doesn't contain boundary")
-        boundary = content_type.split("=")[1].encode()
-        remainbytes = int(self.headers['content-length'])
-        line = self.rfile.readline()
-        remainbytes -= len(line)
-        if not boundary in line:
-            return (False, "Content NOT begin with boundary")
-        line = self.rfile.readline()
-        remainbytes -= len(line)
-        fn = re.findall(r'Content-Disposition.*name="file"; filename="(.*)"', line.decode())
-        if not fn:
-            return (False, "Can't find out file name...")
-        path = self.translate_path(self.path)
-        fn = os.path.join(path, fn[0])
-        line = self.rfile.readline()
-        remainbytes -= len(line)
-        line = self.rfile.readline()
-        remainbytes -= len(line)
-        try:
-            out = open(fn, 'wb')
-        except IOError:
-            return (False, "Can't create file to write, do you have permission to write?")
-                
-        preline = self.rfile.readline()
-        remainbytes -= len(preline)
-        while remainbytes > 0:
-            line = self.rfile.readline()
-            remainbytes -= len(line)
-            if boundary in line:
-                preline = preline[0:-1]
-                if preline.endswith(b'\r'):
-                    preline = preline[0:-1]
-                out.write(preline)
-                out.close()
-                return (True, "File '%s' upload success!" % fn)
-            else:
-                out.write(preline)
-                preline = line
-        return (False, "Unexpect Ends of data.")
- 
-    def send_head(self):
-        """Common code for GET and HEAD commands.
+# Load Full-ImageNet Dictionary (i.e., lexicon):
+with open(lexicon_address, 'r') as f:
+	labels = [l.rstrip() for l in f]
 
-        This sends the response code and MIME headers.
+print("Loading word2vec vectors")
+w2v_model = KeyedVectors.load_word2vec_format("./GoogleNews-vectors-negative300.bin", binary=True)
 
-        Return value is either a file object (which has to be copied
-        to the outputfile by the caller unless the command was HEAD,
-        and must be closed by the caller under all circumstances), or
-        None, in which case the caller has nothing further to do.
 
-        """
-        path = self.translate_path(self.path)
-        f = None
-        if os.path.isdir(path):
-            if not self.path.endswith('/'):
-                # redirect browser - doing basically what apache does
-                self.send_response(301)
-                self.send_header("Location", self.path + "/")
-                self.end_headers()
-                return None
-            for index in "index.html", "index.htm":
-                index = os.path.join(path, index)
-                if os.path.exists(index):
-                    path = index
-                    break
-            else:
-                return self.list_directory(path)
+loop = asyncio.get_event_loop()
+
+class WebSocketServerProtocolWithHTTP(websockets.WebSocketServerProtocol):
+    """Implements a simple static file server for WebSocketServer"""
+
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    async def process_request(self, path, request_headers):
+        """Serves a file when doing a GET request with a valid path"""
+        self.max_size = 2**20
+
+        if "Upgrade" in request_headers:
+            return  # Probably a WebSocket connection
+
+        if path == '/':
+            path = '/index.html'
+
+        response_headers = [
+            ('Server', 'asyncio'),
+            ('Connection', 'close'),
+        ]
+        server_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),"www")
+        full_path = os.path.realpath(os.path.join(server_root, path[1:]))
+
+        print("GET", path, end=' ')
+
+        # Validate the path
+        if os.path.commonpath((server_root, full_path)) != server_root or \
+                not os.path.exists(full_path) or not os.path.isfile(full_path):
+            print("404 NOT FOUND")
+            return HTTPStatus.NOT_FOUND, [], b'404 NOT FOUND'
+
+        print("200 OK")
+        body = open(full_path, 'rb').read()
         ctype = self.guess_type(path)
-        try:
-            # Always read in binary mode. Opening files in text mode may cause
-            # newline translations, making the actual size of the content
-            # transmitted *less* than the content-length!
-            f = open(path, 'rb')
-        except IOError:
-            self.send_error(404, "File not found")
-            return None
-        self.send_response(200)
-        self.send_header("Content-type", ctype)
-        fs = os.fstat(f.fileno())
-        self.send_header("Content-Length", str(fs[6]))
-        self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
-        self.end_headers()
-        return f
- 
-    def list_directory(self, path):
-        """Helper to produce a directory listing (absent index.html).
+        response_headers.append(("Content-type", ctype))
+        response_headers.append(('Content-Length', str(len(body))))
+        return HTTPStatus.OK, response_headers, body
 
-        Return value is either a file object, or None (indicating an
-        error).  In either case, the headers are sent, making the
-        interface the same as for send_head().
-
-        """
-        try:
-            list = os.listdir(path)
-        except os.error:
-            self.send_error(404, "No permission to list directory")
-            return None
-        list.sort(key=lambda a: a.lower())
-        f = BytesIO()
-        displaypath = cgi.escape(urllib.parse.unquote(self.path))
-        f.write(b'<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">')
-        f.write(("<html>\n<title>Directory listing for %s</title>\n" % displaypath).encode())
-        f.write(("<body>\n<h2>Directory listing for %s</h2>\n" % displaypath).encode())
-        f.write(b"<hr>\n")
-        f.write(b"<form ENCTYPE=\"multipart/form-data\" method=\"post\">")
-        f.write(b"<input name=\"file\" type=\"file\"/>")
-        f.write(b"<input type=\"submit\" value=\"Upload and Process\"/></form>\n")
-        f.write(b"<hr>\n<ul>\n")
-        for name in list:
-            fullname = os.path.join(path, name)
-            displayname = linkname = name
-            # Append / for directories or @ for symbolic links
-            if os.path.isdir(fullname):
-                displayname = name + "/"
-                linkname = name + "/"
-            if os.path.islink(fullname):
-                displayname = name + "@"
-                # Note: a link to a directory displays with @ and links with /
-            f.write(('<li><a href="%s">%s</a>\n'
-                    % (urllib.parse.quote(linkname), cgi.escape(displayname))).encode())
-        f.write(b"</ul>\n<hr>\n</body>\n</html>\n")
-        length = f.tell()
-        f.seek(0)
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.send_header("Content-Length", str(length))
-        self.end_headers()
-        return f
- 
-    def translate_path(self, path):
-        """Translate a /-separated PATH to the local filename syntax.
-
-        Components that mean special things to the local file system
-        (e.g. drive or directory names) are ignored.  (XXX They should
-        probably be diagnosed.)
-
-        """
-        # abandon query parameters
-        path = path.split('?',1)[0]
-        path = path.split('#',1)[0]
-        path = posixpath.normpath(urllib.parse.unquote(path))
-        words = path.split('/')
-        words = [_f for _f in words if _f]
-        path = os.getcwd()
-        for word in words:
-            drive, word = os.path.splitdrive(word)
-            head, word = os.path.split(word)
-            if word in (os.curdir, os.pardir): continue
-            path = os.path.join(path, word)
-        return path
- 
-    def copyfile(self, source, outputfile):
-        """Copy all data between two file objects.
-
-        The SOURCE argument is a file object open for reading
-        (or anything with a read() method) and the DESTINATION
-        argument is a file object open for writing (or
-        anything with a write() method).
-
-        The only reason for overriding this would be to change
-        the block size or perhaps to replace newlines by CRLF
-        -- note however that this the default server uses this
-        to copy binary data as well.
-
-        """
-        shutil.copyfileobj(source, outputfile)
- 
     def guess_type(self, path):
         """Guess the type of a file.
 
@@ -280,11 +125,226 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         '.c': 'text/plain',
         '.h': 'text/plain',
         })
- 
- 
-def test(HandlerClass = SimpleHTTPRequestHandler,
-         ServerClass = http.server.HTTPServer):
-    http.server.test(HandlerClass, ServerClass)
- 
-if __name__ == '__main__':
-    test()
+
+def process_upload(websocket, proto):
+    """
+    print(proto.type)
+    print(proto.extension)
+    print(proto.keywords)
+    print(proto.useImages)
+    print(proto.useSounds)
+    print(proto.imageChangeThreshold)
+    print(proto.queryWindowDuration)
+    print(proto.progress)
+    print(proto.error)
+    """
+    
+    random_vec = w2v_model.word_vec("cat")
+    num_features = len(random_vec)
+    feature_vector = np.zeros((num_features,),dtype=random_vec.dtype)
+
+    word_count = 0
+    for word in proto.keywords:
+        try:
+            word_vec = w2v_model.word_vec(word)
+            feature_vector = np.add(feature_vector, word_vec)
+            word_count = word_count + 1.
+        except:
+            pass
+    
+    if word_count:
+        feature_vector = np.divide(feature_vector, word_count)
+
+    server_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),"www")
+    videos_root = os.path.join(server_root,"videos")
+    time_stamp = time.time_ns()
+    short_upload_name = "upload.{}{}".format(time_stamp, proto.extension)
+    short_download_name = "download.{}{}".format(time_stamp, proto.extension)
+    uploaded_file_name = os.path.join(videos_root, short_upload_name)
+    download_file_name = os.path.join(videos_root, short_download_name)
+    if not proto.useImages and not proto.useSounds:
+        message = Message()
+        message.type = Message.ERROR
+        message.error = "You must select at least one mode of analysis (images and/or sounds)."
+        asyncio.run_coroutine_threadsafe(websocket.send(message.SerializeToString()), loop=loop)
+    elif not word_count:
+        message = Message()
+        message.type = Message.ERROR
+        message.error = "The specified keywords create a null feature vector."
+        asyncio.run_coroutine_threadsafe(websocket.send(message.SerializeToString()), loop=loop)
+    elif os.path.isfile(uploaded_file_name):
+        message = Message()
+        message.type = Message.ERROR
+        message.error = "The uploaded file already exists on the server."
+        asyncio.run_coroutine_threadsafe(websocket.send(message.SerializeToString()), loop=loop)
+    elif os.path.commonpath((videos_root, uploaded_file_name)) != videos_root:
+        message = Message()
+        message.type = Message.ERROR
+        message.error = "Invalid file extension."
+        asyncio.run_coroutine_threadsafe(websocket.send(message.SerializeToString()), loop=loop)
+    else:
+        message = Message()
+        message.type = Message.PROGRESS
+        message.error = "Saving input file \"videos/"+short_upload_name+"\" to disk."
+        message.progress = 0
+        asyncio.run_coroutine_threadsafe(websocket.send(message.SerializeToString()), loop=loop)
+        
+        print("Saving uploaded video as: {}".format(uploaded_file_name))
+        with open(uploaded_file_name, "wb") as new_file:
+            new_file.write(proto.video)
+            new_file.close()
+                
+        vframes, aframes, info = torchvision.io.read_video(uploaded_file_name, pts_unit='sec')
+
+        original_vframes = vframes.clone()
+
+        vframes = vframes.to(device)
+            
+        last_frame = None
+        last_weight = 0
+
+        update_frequency = math.floor(len(vframes)*.05)
+        current_frame = 0
+
+        weights = []
+
+        for vframe in vframes:
+
+            if current_frame % update_frequency == 0:
+                message = Message()
+                message.type = Message.PROGRESS
+                message.error = "Processing..."
+                message.progress = current_frame*1.0/len(vframes)
+                asyncio.run_coroutine_threadsafe(websocket.send(message.SerializeToString()), loop=loop)
+
+            orig = vframe
+            vframe = vframe.float()
+            vframe = torch.transpose(vframe, 1, 2)
+            vframe = torch.transpose(vframe, 0, 1)
+            vframe = F.interpolate(vframe, size=224)  #The resize operation on tensor.
+            
+            skip = False
+            if type(last_frame) != type(None):
+                if (last_frame-vframe).abs().sum()/224./224./256. < proto.imageChangeThreshold/100.0:
+                    skip = True
+                else:
+                    last_frame = vframe
+            else:        
+                last_frame = vframe
+            
+            if not skip:
+                vframe = vframe.unsqueeze(0)
+
+                output = model(vframe)
+
+                h_x = output.data.squeeze()
+                probs, idx = h_x.sort(0, True)
+
+                similarity = 0.
+                total = 0.01
+                
+                top_similarity_value = 0.
+                top_similarity_string = ""
+                top_probability_value = 0.
+                top_probability_string = ""
+                top_combination_value = 0.
+                top_combination_string = ""
+                
+                for i in range(0, num_predictions):
+                    tokens1 = labels[idx[i]].split(", ")
+                    for s1 in range(1, len(tokens1)):    
+                        try:
+                            image_word_vector = w2v_model.get_vector(tokens1[s1])
+                            s = dot(matutils.unitvec(feature_vector), matutils.unitvec(image_word_vector))
+                            #w2v_model.similarity(feature_vector, tokens1[s1])
+                            p = probs[i]
+                            similarity += s*p
+                            total += p
+                            if p > top_probability_value:
+                                top_probability_value = p
+                                top_probability_string = tokens1[s1]
+                                
+                            if s > top_similarity_value:
+                                top_similarity_value = s
+                                top_similarity_string = tokens1[s1]
+                                
+                            if s*p > top_combination_value:
+                                top_combination_value = s*p
+                                top_combination_string = tokens1[s1]
+                        except:
+                            pass
+                last_weight = similarity/total
+                """
+                barGraph = ""
+                numBars = 100
+                barRatio = similarity/total#math.sqrt(top_combination_value)
+                
+                for i in range(0, math.floor(numBars*barRatio)):
+                    barGraph += "|"
+                for i in range(math.floor(numBars*barRatio), numBars):
+                    barGraph += "-"
+            
+                print(barGraph)
+                               
+                #print('Top Recognition was {:.2f}% for {}'.format(top_probability_value* 100.0, top_probability_string))
+                #print('Top Similarity was {:.2f}% for {}'.format(top_similarity_value * 100.0, top_similarity_string))
+                #print('Top Combination was {:.2f}% for {}'.format(math.sqrt(top_combination_value) * 100.0, top_combination_string))
+                
+                #print('Top-N Results: ')
+                #for i in range(0, num_predictions):
+                #	print('{:.2f}% -> {}'.format(probs[i] * 100.0, labels[idx[i]]))
+                """
+                """
+                cv2.imshow("Classification", cv2.cvtColor(np.array((orig.cpu())), cv2.COLOR_BGR2RGB))
+
+                # Press Q on keyboard to exit
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                """
+            current_frame += 1
+            weights.append(last_weight)
+
+        message = Message()
+        message.type = Message.PROGRESS
+        message.error = "Saving output file \"videos/"+short_download_name+"\" to disk."
+        message.progress = 0
+        asyncio.run_coroutine_threadsafe(websocket.send(message.SerializeToString()), loop=loop)
+            
+        weights = torch.Tensor(weights)
+
+        descending_weights, sorted_index = torch.sort(weights, dim=0, descending=True)
+
+        rearranged_frames = original_vframes.index_select(0, sorted_index)
+
+        torchvision.io.write_video(download_file_name, rearranged_frames, int(.5+info["video_fps"]))
+        
+        message = Message()
+        message.type = Message.RESULT
+        message.extension = short_download_name
+        asyncio.run_coroutine_threadsafe(websocket.send(message.SerializeToString()), loop=loop)
+
+
+async def on_connection(websocket, path):
+    while True:
+        #now = datetime.datetime.utcnow().isoformat() + 'Z'
+        #await websocket.send(now)
+        length = int(await websocket.recv())
+        array = b''
+        while len(array) != length:
+            array += await websocket.recv()
+            message = Message()
+            message.type = Message.PROGRESS
+            message.error = "Uploading..."
+            message.progress = len(array)*1.0/length
+            await websocket.send(message.SerializeToString())
+        message = Message()
+        threading.Thread(target=process_upload, args=(websocket, message.FromString(array))).start()
+
+
+if __name__ == "__main__":
+    start_server = websockets.serve(on_connection, 'localhost', 80,
+                                    create_protocol=WebSocketServerProtocolWithHTTP)
+    print("Running server at http://localhost:80/")
+
+    loop.run_until_complete(start_server)
+    loop.run_forever()

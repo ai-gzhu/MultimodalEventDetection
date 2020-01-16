@@ -25,7 +25,7 @@ args = vars(ap.parse_args())
 
 
 # Load Converted Model:
-num_predictions = 50
+num_predictions = 64
 model_address = './resnet152Full.pth'
 lexicon_address = './synset.txt'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

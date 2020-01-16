@@ -1,0 +1,22 @@
+// messages.proto
+syntax = "proto3";
+package messages;
+
+message Message {
+  enum Type {
+    UPLOAD = 0;
+    PROGRESS = 1;
+    ERROR = 2;
+    RESULT = 3;
+  }
+  Type type = 1;
+  bytes video = 2;
+  string extension = 3;
+  repeated string keywords = 4;
+  bool useImages = 5;
+  bool useSounds = 6;
+  float imageChangeThreshold = 7;
+  float queryWindowDuration = 8;
+  float progress = 9;
+  string error = 10;
+}
