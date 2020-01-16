@@ -3,3 +3,4 @@ GoogleNews-vectors-negative300.bin
 kit_imagenet.py
 synset.txt
 resnet152Full.pth
+www/videos/*
